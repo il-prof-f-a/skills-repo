@@ -80,3 +80,31 @@ def group_and_sort(emails: list) -> dict:
         )
 
     return groups
+
+
+def render_terminal(groups: dict, days: int, today: datetime = None) -> None:
+    if today is None:
+        today = datetime.now()
+    since = today - timedelta(days=days)
+
+    print(f"\n=== DIGEST EMAIL — {days} giorni "
+          f"({since.strftime('%d/%m')} - {today.strftime('%d/%m/%Y')}) ===\n")
+
+    if not groups:
+        print(f"Nessuna email negli ultimi {days} giorni.")
+        return
+
+    priority_label = {'Alta': '[ALTA]', 'Media': '[MEDIA]', 'Bassa': '[BASSA]'}
+
+    for topic, emails in groups.items():
+        icon = TOPIC_ICONS.get(topic, '📧')
+        counts = {p: sum(1 for e in emails if e['priority'] == p)
+                  for p in ['Alta', 'Media', 'Bassa']}
+        print(f"{icon} {topic.upper()} "
+              f"[Alta: {counts['Alta']} | Media: {counts['Media']} | Bassa: {counts['Bassa']}]")
+        for em in emails:
+            label = priority_label[em['priority']]
+            date_obj = em['date']
+            date_fmt = date_obj.strftime('%d/%m') if isinstance(date_obj, datetime) else ''
+            print(f"  {label} \"{em['subject']}\" — {em['sender']} ({date_fmt})")
+        print()
