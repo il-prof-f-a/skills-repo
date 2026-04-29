@@ -34,3 +34,30 @@ LAVORO_KW = ['progetto', 'riunione', 'meeting', 'call', 'task', 'offerta', 'cont
 FATTURE_KW = ['fattura', 'pagamento', 'invoice', 'scadenza', 'bonifico', 'ricevuta']
 NEWSLETTER_KW = ['unsubscribe', 'newsletter']
 NOTIFICHE_KW = ['noreply', 'no-reply', 'notification', 'alert', 'conferma', 'verifica']
+
+
+def classify(subject: str, sender: str) -> tuple:
+    subject_lower = subject.lower()
+    sender_lower = sender.lower()
+
+    if any(k in subject_lower for k in ALTA_KEYWORDS):
+        priority = 'Alta'
+    elif any(k in sender_lower for k in BASSA_SENDERS):
+        priority = 'Bassa'
+    else:
+        priority = 'Media'
+
+    text = subject_lower + ' ' + sender_lower
+
+    if any(k in text for k in NEWSLETTER_KW):
+        topic = 'Newsletter'
+    elif any(k in text for k in FATTURE_KW):
+        topic = 'Fatture/Pagamenti'
+    elif any(k in text for k in NOTIFICHE_KW):
+        topic = 'Notifiche'
+    elif any(k in text for k in LAVORO_KW):
+        topic = 'Lavoro'
+    else:
+        topic = 'Personale'
+
+    return topic, priority
