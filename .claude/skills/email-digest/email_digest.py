@@ -61,3 +61,22 @@ def classify(subject: str, sender: str) -> tuple:
         topic = 'Personale'
 
     return topic, priority
+
+
+def group_and_sort(emails: list) -> dict:
+    groups = {}
+    for em in emails:
+        topic = em['topic']
+        if topic not in groups:
+            groups[topic] = []
+        groups[topic].append(em)
+
+    for topic in groups:
+        groups[topic].sort(
+            key=lambda e: (
+                PRIORITY_ORDER[e['priority']],
+                -(e['date'].timestamp() if hasattr(e['date'], 'timestamp') else 0),
+            )
+        )
+
+    return groups
