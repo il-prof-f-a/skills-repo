@@ -108,3 +108,44 @@ def render_terminal(groups: dict, days: int, today: datetime = None) -> None:
             date_fmt = date_obj.strftime('%d/%m') if isinstance(date_obj, datetime) else ''
             print(f"  {label} \"{em['subject']}\" — {em['sender']} ({date_fmt})")
         print()
+
+
+def render_md(groups: dict, filepath: str, days: int, today: datetime = None) -> None:
+    if today is None:
+        today = datetime.now()
+    since = today - timedelta(days=days)
+
+    priority_emoji = {'Alta': '🔴', 'Media': '🟡', 'Bassa': '🟢'}
+
+    lines = [
+        f"# Email Digest — {since.strftime('%d/%m')} - {today.strftime('%d/%m/%Y')}",
+        f"",
+        f"Generato il {today.strftime('%d/%m/%Y %H:%M')} | Periodo: ultimi {days} giorni",
+        f"",
+    ]
+
+    for topic, emails in groups.items():
+        icon = TOPIC_ICONS.get(topic, '📧')
+        lines.append(f"## {icon} {topic}")
+        lines.append("")
+        lines.append("| Priorità | Oggetto | Mittente | Data |")
+        lines.append("|---|---|---|---|")
+
+        for em in emails:
+            emoji = priority_emoji[em['priority']]
+            subject = em['subject'].replace('|', '\\|')
+            msg_id = em.get('message_id', '').strip()
+            link = f"{GMAIL_BASE}:{msg_id}" if msg_id else '#'
+            sender = em['sender'].replace('|', '\\|')
+            date_obj = em['date']
+            date_fmt = date_obj.strftime('%d/%m') if isinstance(date_obj, datetime) else ''
+            lines.append(
+                f"| {emoji} {em['priority']} | [{subject}]({link}) | {sender} | {date_fmt} |"
+            )
+
+        lines.append("")
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+
+    print(f"File Markdown scritto: {filepath}")
