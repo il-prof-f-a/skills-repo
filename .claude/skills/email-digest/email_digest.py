@@ -149,3 +149,146 @@ def render_md(groups: dict, filepath: str, days: int, today: datetime = None) ->
         f.write('\n'.join(lines))
 
     print(f"File Markdown scritto: {filepath}")
+
+
+def decode_str(s) -> str:
+    if not s:
+        return ''
+    parts = decode_header(s)
+    decoded = []
+    for part, charset in parts:
+        if isinstance(part, bytes):
+            try:
+                decoded.append(part.decode(charset or 'utf-8', errors='replace'))
+            except Exception:
+                decoded.append(part.decode('utf-8', errors='replace'))
+        else:
+            decoded.append(str(part))
+    return ''.join(decoded)
+
+
+def parse_date(date_str: str) -> datetime:
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
+
+
+def get_snippet(msg) -> str:
+    body = ''
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == 'text/plain':
+                try:
+                    payload = part.get_payload(decode=True)
+                    charset = part.get_content_charset() or 'utf-8'
+                    body = payload.decode(charset, errors='replace')
+                    break
+                except Exception:
+                    pass
+    else:
+        try:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or 'utf-8'
+                body = payload.decode(charset, errors='replace')
+        except Exception:
+            pass
+    return body[:200].replace('\n', ' ').strip()
+
+
+def fetch_emails(days: int = 7) -> list:
+    password = os.environ.get('GMAIL_APP_PASSWORD', '')
+    if not password:
+        print('ERRORE: variabile GMAIL_APP_PASSWORD non impostata')
+        sys.exit(1)
+
+    since = datetime.now() - timedelta(days=days)
+    since_date = f"{since.day:02d}-{IMAP_MONTHS[since.month - 1]}-{since.year}"
+
+    emails = []
+    print(f"Connessione IMAP {GMAIL_USER}...")
+
+    with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as mail:
+        mail.login(GMAIL_USER, password)
+        mail.select('INBOX')
+
+        _, msg_ids = mail.search(None, f'SINCE {since_date}')
+        ids = msg_ids[0].split()
+
+        print(f"Email trovate: {len(ids)}")
+
+        for msg_id in ids:
+            try:
+                _, data = mail.fetch(msg_id, '(RFC822)')
+                raw = data[0][1]
+                msg = email_lib.message_from_bytes(raw)
+
+                subject = decode_str(msg.get('Subject', '(nessun oggetto)'))
+                sender = decode_str(msg.get('From', ''))
+                date_str = msg.get('Date', '')
+                message_id = msg.get('Message-ID', '').strip().strip('<>')
+
+                date = parse_date(date_str)
+                snippet = get_snippet(msg)
+                topic, priority = classify(subject, sender)
+
+                emails.append({
+                    'id': msg_id.decode(),
+                    'message_id': message_id,
+                    'subject': subject,
+                    'sender': sender,
+                    'date': date,
+                    'snippet': snippet,
+                    'topic': topic,
+                    'priority': priority,
+                })
+            except Exception as e:
+                print(f"  Warning: skip email {msg_id} — {e}")
+                continue
+
+    return emails
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Digest email Gmail — ultimi N giorni',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Esempi:
+  python email_digest.py
+  python email_digest.py --md
+  python email_digest.py --md report.md
+  python email_digest.py --days 14""",
+    )
+    parser.add_argument(
+        '--md',
+        nargs='?',
+        const=f"email_digest_{datetime.now().strftime('%Y-%m-%d')}.md",
+        metavar='FILE',
+        help='Genera file Markdown (default: email_digest_YYYY-MM-DD.md)',
+    )
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=7,
+        metavar='N',
+        help='Numero di giorni da leggere (default: 7)',
+    )
+    args = parser.parse_args()
+
+    emails = fetch_emails(args.days)
+
+    if not emails:
+        print(f"Nessuna email negli ultimi {args.days} giorni.")
+        return
+
+    groups = group_and_sort(emails)
+    render_terminal(groups, args.days)
+
+    if args.md:
+        render_md(groups, args.md, args.days)
+
+
+if __name__ == '__main__':
+    main()
